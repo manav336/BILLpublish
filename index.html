@@ -183,22 +183,37 @@ import { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, delet
       }
     }
 
-    window.addNewParty = async function() {
-      const partyNameInput = document.getElementById('new-party-input');
-      const val = partyNameInput.value.trim();
-      if (val && !partyList.includes(val)) {
-        try {
-          await addDoc(collection(db, "parties"), { name: val });
-          partyNameInput.value = '';
-          await loadAndRenderPartyLinks();
-        } catch (e) {
-          console.error("Error adding new party: ", e);
-          alert("Failed to add party to cloud.");
-        }
-      } else if (partyList.includes(val)) {
-        alert("Party already exists.");
-      }
+  window.addNewParty = async function() {
+  console.log("addNewParty function called."); // 1. Function entry
+  const partyNameInput = document.getElementById('new-party-input');
+  if (!partyNameInput) {
+    console.error("Could not find 'new-party-input' element!");
+    return;
+  }
+  const val = partyNameInput.value.trim();
+  console.log("Party name entered: '", val, "'"); // 2. Value captured
+
+  if (val && !partyList.includes(val)) {
+    console.log("Attempting to add new party to Firebase..."); // 3. Before Firebase call
+    try {
+      const docRef = await addDoc(collection(db, "parties"), { name: val });
+      console.log("Party added to Firebase with ID: ", docRef.id); // 4. Firebase success
+      partyNameInput.value = '';
+      console.log("Attempting to reload and render party links..."); // 5. Before refresh
+      await loadAndRenderPartyLinks();
+      console.log("Party links reloaded and rendered."); // 6. Refresh success
+    } catch (e) {
+      console.error("Error during Firebase addDoc or loadAndRenderPartyLinks: ", e); // 7. Catch block
+      alert("Failed to add party to cloud. Check console for details. Error: " + e.message);
     }
+  } else if (partyList.includes(val)) {
+    console.log("Party '", val, "' already exists."); // 8. Already exists
+    alert("Party already exists.");
+  } else if (!val) {
+    console.log("No party name entered."); // 9. Empty value
+    alert("Please enter a party name.");
+  }
+}
     
     function populatePartySelects() {
         const selects = document.querySelectorAll('select[name^="party-"]');
