@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Secure Transaction Form - Cloud Version</title>
+  <title>Transaction Form - Cloud Version</title> <!-- Changed title slightly -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
@@ -17,7 +17,7 @@
       color: #333;
       text-align: center;
     }
-    .form-container, #transaction-form {
+    .form-container, #transaction-form { /* .form-container might not be used anymore if code-entry is gone */
       margin: 50px auto;
       background: #fff;
       padding: 30px;
@@ -62,24 +62,9 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
-    .error-message {
-      color: red;
-      margin-top: 10px;
-      text-align: center;
-    }
-    #tick-animation {
-      display: none;
-      font-size: 48px;
-      color: green;
-      margin: 20px;
-      animation: tickFade 1.2s ease-in-out;
-      text-align: center;
-    }
-    @keyframes tickFade {
-      0% { transform: scale(0); opacity: 0; }
-      50% { transform: scale(1.2); opacity: 1; }
-      100% { transform: scale(1); opacity: 0; }
-    }
+    /* .error-message might not be needed anymore */
+    /* #tick-animation might not be needed anymore */
+
     .pdf-item {
       background: #e7f3ff;
       padding: 10px;
@@ -134,9 +119,7 @@
       margin-bottom: 10px;
       cursor: pointer;
     }
-    #code-entry {
-      text-align: center;
-    }
+    /* #code-entry specific styles are not needed */
   </style>
 </head>
 <body>
@@ -147,8 +130,9 @@
     <div id="party-links"></div>
   </div>
 
-  
-  <div id="transaction-form" style="display:none;">
+  <!-- Code Entry Div REMOVED -->
+
+  <div id="transaction-form"> <!-- Removed style="display:none;" -->
     <h1><i class="fa-solid fa-file-invoice-dollar icon"></i>Transaction Entry</h1>
     <div id="form-container"></div>
     <button class="btn" style="background: green;" onclick="addEntry()"><i class="fa-solid fa-plus"></i></button>
@@ -163,10 +147,8 @@
 
   <script type="module">
     // Import Firebase and jspdf
-    // IMPORTANT: Make sure firebase-config.js is in the same directory as this HTML file,
-    // or update the path './firebase-config.js' accordingly.
     import { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject } from './firebase-config.js';
-    const { jsPDF } = window.jspdf; // jspdf is loaded globally
+    const { jsPDF } = window.jspdf;
 
     // --- UI Elements & Event Listeners ---
     document.getElementById('menu-toggle').onclick = () => document.getElementById('side-menu').classList.add('show');
@@ -175,12 +157,12 @@
     // --- Global State ---
     let partyList = [];
     let entryCount = 0;
-    const correctCode = "mds"; // Access code
+    // const correctCode = "mds"; // REMOVED Access code
 
     // --- Party Management (Firebase Integration) ---
     async function loadAndRenderPartyLinks() {
       const partyLinksContainer = document.getElementById('party-links');
-      partyLinksContainer.innerHTML = ''; // Clear existing
+      partyLinksContainer.innerHTML = '';
       partyList = [];
       try {
         const querySnapshot = await getDocs(collection(db, "parties"));
@@ -193,9 +175,8 @@
           div.onclick = () => showPartyUploads(partyData.name);
           partyLinksContainer.appendChild(div);
         });
-        if (document.getElementById("transaction-form").style.display === "block") {
-            populatePartySelects();
-        }
+        // Re-populate select dropdowns if form is visible (it always is now initially)
+        populatePartySelects();
       } catch (e) {
         console.error("Error loading parties: ", e);
         alert("Could not load party list from cloud.");
@@ -222,9 +203,11 @@
     function populatePartySelects() {
         const selects = document.querySelectorAll('select[name^="party-"]');
         selects.forEach(select => {
-            const currentValue = select.value;
+            const currentValue = select.value; // Might be empty on first load
             select.innerHTML = partyList.map(p => `<option value="${p}" ${p === currentValue ? 'selected' : ''}>${p}</option>`).join('');
-            if (!partyList.includes(currentValue) && partyList.length > 0) {
+            if (!currentValue && partyList.length > 0) { // If no value was set and parties exist, select first
+                select.value = partyList[0];
+            } else if (!partyList.includes(currentValue) && partyList.length > 0) {
                 select.value = partyList[0];
             } else if (partyList.length === 0) {
                 select.innerHTML = '<option value="">No Parties Available</option>';
@@ -233,33 +216,7 @@
     }
 
     // --- Access Code & Form Initialization ---
-    window.validateCode = async function() {
-      console.log("validateCode function CALLED.");
-      const codeInput = document.getElementById("accessCode");
-      if (!codeInput) {
-          console.error("Critical Error: accessCode input field NOT FOUND in the HTML!");
-          return;
-      }
-      const code = codeInput.value;
-      console.log("Entered code: '", code, "'");
-      console.log("Correct code expected: '", correctCode, "'");
-
-      if (code === correctCode) {
-        console.log("Code MATCHES!");
-        document.getElementById("code-entry").style.display = "none";
-        document.getElementById("transaction-form").style.display = "block";
-        try {
-            await loadAndRenderPartyLinks();
-            addEntry(); 
-        } catch (e) {
-            console.error("Error during loadAndRenderPartyLinks or addEntry:", e);
-            alert("Error initializing form after code entry. Check console.");
-        }
-      } else {
-        console.log("Code DOES NOT MATCH.");
-        document.getElementById("error-message").textContent = "Incorrect code.";
-      }
-    }
+    // window.validateCode = async function() { ... } // REMOVED
 
     // --- Transaction Entry Management ---
     window.addEntry = function() {
@@ -279,16 +236,28 @@
       `;
       container.appendChild(div);
       entryCount++;
-    }
-
-    window.removeEntry = function() {
-      if (entryCount > 1) {
-        entryCount--;
-        document.getElementById(`entry-${entryCount}`).remove();
+      // If this is the first entry added, and parties exist, ensure the select has a value
+      if (entryCount === 1 && partyList.length > 0) {
+          const firstSelect = div.querySelector('select[name^="party-"]');
+          if (firstSelect && !firstSelect.value) {
+              firstSelect.value = partyList[0];
+          }
       }
     }
 
-    // --- PDF Generation & Cloud Upload ---
+    window.removeEntry = function() {
+      if (entryCount > 1) { // Keep at least one entry if you add one on load
+        entryCount--;
+        document.getElementById(`entry-${entryCount}`).remove();
+      } else if (entryCount === 1 && document.querySelectorAll('.entry').length > 0) {
+        // Optional: Allow removing the very last entry.
+        // If you want to always keep one, then the condition should be entryCount > 1
+         document.getElementById(`entry-${entryCount -1 }`).remove(); // Corrected ID if entryCount was already decremented
+         entryCount = 0; // Reset if all are removed
+      }
+    }
+
+    // --- PDF Generation & Cloud Upload (Functions remain the same) ---
     function getMonthName(i) {
       return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i];
     }
@@ -318,17 +287,18 @@
       const { jsPDF } = window.jspdf;
       const docPDF = new jsPDF();
       const entries = document.querySelectorAll('.entry');
-      if (entries.length === 0) return alert("No entries to save.");
+      if (entries.length === 0) {
+        alert("No entries to save. Please add at least one transaction.");
+        return;
+      }
+
 
       let billNumber;
       try {
         billNumber = await getNextBillNumberFromCloud();
       } catch (e) {
-        // Error already alerted in getNextBillNumberFromCloud, so just return
         return;
       }
-      // If getNextBillNumberFromCloud threw and was caught, it might return undefined.
-      // This check is more robust.
       if (!billNumber) {
           console.error("Failed to obtain a bill number. Aborting saveAndShowPDF.");
           return;
@@ -371,9 +341,9 @@
         const dateVal = entry.querySelector('input[type="date"]').value || "---";
         const tofromVal = entry.querySelector('input[name^="tofrom"]').value || "---";
         const moneyVal = parseFloat(entry.querySelector('input[name^="money"]').value) || 0;
-        const partySelect = entry.querySelector('select'); // Get the select element
-        let partyVal = "General"; // Default value
-        if (partySelect && partySelect.value) { // Check if select exists and has a value
+        const partySelect = entry.querySelector('select');
+        let partyVal = "General";
+        if (partySelect && partySelect.value) {
             partyVal = partySelect.value;
         }
         
@@ -386,7 +356,6 @@
         y += 10;
       });
       
-      // Ensure partyName is set, especially if only one entry and it might not have been explicitly selected
       if (!partyName && entries.length > 0) {
           const firstEntryPartySelect = entries[0].querySelector('select');
           if (firstEntryPartySelect && firstEntryPartySelect.value && firstEntryPartySelect.value !== "No Parties Available" && firstEntryPartySelect.value !== "") {
@@ -394,13 +363,15 @@
           }
       }
       
-      // If still no partyName and partyList has items, try to use the first party as a fallback
       if (!partyName && partyList.length > 0) {
          partyName = partyList[0];
-      } else if (!partyName) { // Final check
-         alert("Please select a party for the transaction or add a party first.");
-         return;
+      } else if (!partyName && entries.length > 0) { // If no partyList but entries exist, default to General
+         partyName = "General"; 
+      } else if (!partyName) {
+         alert("Please select a party for the transaction or add a party first. If no parties exist, the bill will be 'General'.");
+         partyName = "General"; // Default if truly no party can be determined
       }
+
 
       docPDF.setFont("Courier", "bold");
       docPDF.text(`\nTotal: ${total.toFixed(2)}`, 150, y);
@@ -437,7 +408,7 @@
       }
     }
 
-    // --- Displaying and Managing Uploaded PDFs from Cloud ---
+    // --- Displaying and Managing Uploaded PDFs from Cloud (Functions remain the same) ---
     window.showPartyUploads = async function(party) {
       await renderPartyUploads(party);
       document.getElementById('side-menu').classList.remove('show');
@@ -509,14 +480,22 @@
 
         alert("Bill deleted successfully.");
         renderPartyUploads(partyName);
-      } catch (e) {
+      } catch (e)
+        {
         console.error("Error deleting upload: ", e);
         alert("Failed to delete bill. Error: " + e.message);
       }
     }
 
-    // Initial checks or calls can go here if needed,
-    // but most logic is triggered by user interaction after code validation.
+    // --- Initialize the form on page load ---
+    async function initializeApp() {
+        console.log("Initializing app...");
+        await loadAndRenderPartyLinks(); // Load parties first
+        addEntry(); // Then add the initial entry field
+        console.log("App initialized.");
+    }
+
+    initializeApp(); // Call the initialization function
 
   </script>
 </body>
