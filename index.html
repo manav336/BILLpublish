@@ -147,7 +147,7 @@
 
   <script type="module">
     // Import Firebase and jspdf
-  import { db, storage, /* ... other imports ... */ } from './firebase-config.js';
+  import { db, storage, /* ... other imports ... */ } from 'firebase-config.js'; // Removed './'
     // --- UI Elements & Event Listeners ---
     document.getElementById('menu-toggle').onclick = () => document.getElementById('side-menu').classList.add('show');
     document.getElementById('close-menu').onclick = () => document.getElementById('side-menu').classList.remove('show');
