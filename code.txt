@@ -1,0 +1,101 @@
+# Secure Transaction Form - Cloud Version
+
+This project is a web-based transaction entry form that saves data to Firebase (Firestore and Storage) and allows PDF generation of transactions.
+
+## Features
+
+*   Access code protection for the form.
+*   Dynamic transaction entry rows.
+*   Party management (add new parties, select existing parties).
+*   Generates a PDF bill for transactions.
+*   Uploads generated PDFs and transaction metadata to Firebase Cloud Storage and Firestore.
+*   View and manage uploaded bills per party.
+*   Delete uploaded bills from the cloud.
+
+## Prerequisites
+
+*   A modern web browser (Chrome, Firefox, Edge, Safari).
+*   Node.js and npm (optional, for using `http-server`, but recommended for local development).
+*   A Firebase project set up with Firestore and Cloud Storage enabled.
+
+## Setup
+
+1.  **Clone the Repository (or download the files):**
+    ```bash
+    git clone <your-repository-url>
+    cd <repository-name>
+    ```
+
+2.  **Firebase Configuration:**
+    *   Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/).
+    *   Enable Firestore and Cloud Storage for your project.
+    *   In your Firebase project settings, find your web app's configuration (apiKey, authDomain, etc.).
+    *   Create a file named `firebase-config.js` in the root of the project directory.
+    *   Copy the following template into `firebase-config.js` and replace the placeholder values with your actual Firebase project configuration details:
+
+        ```javascript
+        // firebase-config.js
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
+
+        const firebaseConfig = {
+          apiKey: "YOUR_API_KEY",
+          authDomain: "YOUR_AUTH_DOMAIN",
+          projectId: "YOUR_PROJECT_ID",
+          storageBucket: "YOUR_STORAGE_BUCKET",
+          messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+          appId: "YOUR_APP_ID"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        export { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject };
+        ```
+    *   **Security Note:** Be mindful of your Firebase security rules. For this project, ensure your rules allow authenticated users (or specific users, if implementing Firebase Auth more deeply) to read and write to the `parties`, `bills`, and `appConfig` collections, and to read/write to the `bills/` path in Cloud Storage. If this is a public GitHub repo, consider stricter rules or not committing your actual `firebase-config.js` directly if it contains sensitive keys and your rules are too open.
+
+3.  **Firebase Firestore Setup (Initial Data - Optional but Recommended):**
+    *   For the bill numbering to work correctly from the start, you might need to manually create the `appConfig` collection and a document named `settings` within it.
+    *   In the `settings` document, add a field `nextBillNumber` (type: number) and set its initial value (e.g., `1`). The application will create this if it doesn't exist on the first attempt to get a bill number, but initializing it can be good practice.
+
+## Running the Application Locally
+
+Because this application uses JavaScript ES Modules (`import`/`export` syntax, `type="module"` in the script tag), you **must** serve the `index.html` file through a local web server. Opening it directly as a `file:///` URL will likely result in CORS errors and prevent the application from working.
+
+**Recommended Method: Using VS Code Live Server**
+1.  Open the project folder in Visual Studio Code.
+2.  Install the "Live Server" extension (by Ritwick Dey) if you haven't already.
+3.  Right-click on `index.html` in the VS Code Explorer.
+4.  Select "Open with Live Server".
+5.  Your browser will open to a URL like `http://localhost:5500/`.
+
+**Alternative Method: Using `http-server` (Node.js required)**
+1.  Open your terminal or command prompt.
+2.  Navigate to the project's root directory.
+3.  If you don't have `http-server` installed globally, run:
+    ```bash
+    npm install -g http-server
+    ```
+4.  Start the server:
+    ```bash
+    http-server .
+    ```
+5.  Open your browser and go to `http://localhost:8080` (or the port indicated by `http-server`).
+
+## Usage
+
+1.  Open the application in your browser using one of the local server methods above.
+2.  Enter the access code (`mds`) and click "Submit".
+3.  The transaction form will appear.
+    *   Use the "+" and "-" buttons to add or remove transaction entry lines.
+    *   Fill in the date, to-from details, money amount, and select a party for each transaction.
+    *   To add a new party, type the name in the "Add Party" input and click the "+" button next to it.
+4.  Click "Upload to Cloud" to generate a PDF, save it to Firebase Storage, and save the transaction details to Firestore.
+5.  Use the menu icon (top-left) to open the side menu and view bills uploaded for specific parties.
+    *   You can download or delete bills from this view.
+
+## Access Code
+
+The default access code is `mds`. This is hardcoded in `index.html`. For better security in a real application, this should be handled differently (e.g., Firebase Authentication).

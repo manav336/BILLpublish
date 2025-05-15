@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Secure Transaction Form - Cloud Version</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    /* Your CSS remains the same */
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f8ff;
+      margin: 0;
+      padding: 0;
+    }
+    h1, h2 {
+      color: #333;
+      text-align: center;
+    }
+    .form-container, #transaction-form {
+      margin: 50px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 700px;
+      animation: fadeIn 1s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      color: white;
+      margin: 5px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    .btn-upload { background: #007bff; }
+    .btn-remove { background: #dc3545; }
+    .btn:hover { opacity: 0.9; }
+    .entry {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .entry label {
+      flex: 1 1 45%;
+      margin: 0 5px;
+    }
+    input, select {
+      padding: 5px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .error-message {
+      color: red;
+      margin-top: 10px;
+      text-align: center;
+    }
+    #tick-animation {
+      display: none;
+      font-size: 48px;
+      color: green;
+      margin: 20px;
+      animation: tickFade 1.2s ease-in-out;
+      text-align: center;
+    }
+    @keyframes tickFade {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+    .pdf-item {
+      background: #e7f3ff;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      border: 1px solid #bbb;
+    }
+    .icon { margin-right: 5px; }
+    #menu-toggle {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      z-index: 1001;
+    }
+    #side-menu {
+      position: fixed;
+      left: -250px;
+      top: 0;
+      width: 250px;
+      height: 100%;
+      background: #003366;
+      color: white;
+      padding: 20px;
+      transition: left 0.3s;
+      z-index: 1000;
+    }
+    #side-menu.show {
+      left: 0;
+    }
+    #side-menu h3 {
+      color: #fff;
+      margin-top: 0;
+    }
+    .party-link {
+      background: #0055aa;
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+    #close-menu {
+      background: red;
+      color: white;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    #code-entry {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <button id="menu-toggle"><i class="fa-solid fa-ellipsis-v"></i></button>
+  <div id="side-menu">
+    <button id="close-menu">Close</button>
+    <h3>Party Pages</h3>
+    <div id="party-links"></div>
+  </div>
+
+  
+  <div id="transaction-form" style="display:none;">
+    <h1><i class="fa-solid fa-file-invoice-dollar icon"></i>Transaction Entry</h1>
+    <div id="form-container"></div>
+    <button class="btn" style="background: green;" onclick="addEntry()"><i class="fa-solid fa-plus"></i></button>
+    <button class="btn btn-remove" onclick="removeEntry()"><i class="fa-solid fa-minus"></i></button>
+    <button class="btn btn-upload" onclick="saveAndShowPDF()"><i class="fa-solid fa-cloud-upload-alt"></i> Upload to Cloud</button>
+    <div>
+      <label><b>Add Party:</b> <input id="new-party-input" type="text" placeholder="New Party Name">
+      <button onclick="addNewParty()">+</button></label>
+    </div>
+    <div class="pdf-preview" id="pdf-list"></div>
+  </div>
+
+  <script type="module">
+    // Import Firebase and jspdf
+    // IMPORTANT: Make sure firebase-config.js is in the same directory as this HTML file,
+    // or update the path './firebase-config.js' accordingly.
+    import { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject } from './firebase-config.js';
+    const { jsPDF } = window.jspdf; // jspdf is loaded globally
+
+    // --- UI Elements & Event Listeners ---
+    document.getElementById('menu-toggle').onclick = () => document.getElementById('side-menu').classList.add('show');
+    document.getElementById('close-menu').onclick = () => document.getElementById('side-menu').classList.remove('show');
+
+    // --- Global State ---
+    let partyList = [];
+    let entryCount = 0;
+    const correctCode = "mds"; // Access code
+
+    // --- Party Management (Firebase Integration) ---
+    async function loadAndRenderPartyLinks() {
+      const partyLinksContainer = document.getElementById('party-links');
+      partyLinksContainer.innerHTML = ''; // Clear existing
+      partyList = [];
+      try {
+        const querySnapshot = await getDocs(collection(db, "parties"));
+        querySnapshot.forEach((doc) => {
+          const partyData = doc.data();
+          partyList.push(partyData.name);
+          const div = document.createElement('div');
+          div.className = 'party-link';
+          div.textContent = partyData.name;
+          div.onclick = () => showPartyUploads(partyData.name);
+          partyLinksContainer.appendChild(div);
+        });
+        if (document.getElementById("transaction-form").style.display === "block") {
+            populatePartySelects();
+        }
+      } catch (e) {
+        console.error("Error loading parties: ", e);
+        alert("Could not load party list from cloud.");
+      }
+    }
+
+    window.addNewParty = async function() {
+      const partyNameInput = document.getElementById('new-party-input');
+      const val = partyNameInput.value.trim();
+      if (val && !partyList.includes(val)) {
+        try {
+          await addDoc(collection(db, "parties"), { name: val });
+          partyNameInput.value = '';
+          await loadAndRenderPartyLinks();
+        } catch (e) {
+          console.error("Error adding new party: ", e);
+          alert("Failed to add party to cloud.");
+        }
+      } else if (partyList.includes(val)) {
+        alert("Party already exists.");
+      }
+    }
+    
+    function populatePartySelects() {
+        const selects = document.querySelectorAll('select[name^="party-"]');
+        selects.forEach(select => {
+            const currentValue = select.value;
+            select.innerHTML = partyList.map(p => `<option value="${p}" ${p === currentValue ? 'selected' : ''}>${p}</option>`).join('');
+            if (!partyList.includes(currentValue) && partyList.length > 0) {
+                select.value = partyList[0];
+            } else if (partyList.length === 0) {
+                select.innerHTML = '<option value="">No Parties Available</option>';
+            }
+        });
+    }
+
+    // --- Access Code & Form Initialization ---
+    window.validateCode = async function() {
+      console.log("validateCode function CALLED.");
+      const codeInput = document.getElementById("accessCode");
+      if (!codeInput) {
+          console.error("Critical Error: accessCode input field NOT FOUND in the HTML!");
+          return;
+      }
+      const code = codeInput.value;
+      console.log("Entered code: '", code, "'");
+      console.log("Correct code expected: '", correctCode, "'");
+
+      if (code === correctCode) {
+        console.log("Code MATCHES!");
+        document.getElementById("code-entry").style.display = "none";
+        document.getElementById("transaction-form").style.display = "block";
+        try {
+            await loadAndRenderPartyLinks();
+            addEntry(); 
+        } catch (e) {
+            console.error("Error during loadAndRenderPartyLinks or addEntry:", e);
+            alert("Error initializing form after code entry. Check console.");
+        }
+      } else {
+        console.log("Code DOES NOT MATCH.");
+        document.getElementById("error-message").textContent = "Incorrect code.";
+      }
+    }
+
+    // --- Transaction Entry Management ---
+    window.addEntry = function() {
+      const container = document.getElementById("form-container");
+      const div = document.createElement("div");
+      div.className = "entry";
+      div.id = `entry-${entryCount}`;
+      const partyOptions = partyList.length > 0 
+        ? partyList.map(p => `<option value="${p}">${p}</option>`).join('')
+        : '<option value="">No Parties Available</option>';
+
+      div.innerHTML = `  
+        <label>Date: <input type="date" name="date-${entryCount}" required></label>
+        <label>To-From: <input type="text" name="tofrom-${entryCount}" placeholder="To - From" required></label>
+        <label>Money: ₹<input type="number" name="money-${entryCount}" placeholder="Amount" required></label>
+        <label>Party: <select name="party-${entryCount}">${partyOptions}</select></label>
+      `;
+      container.appendChild(div);
+      entryCount++;
+    }
+
+    window.removeEntry = function() {
+      if (entryCount > 1) {
+        entryCount--;
+        document.getElementById(`entry-${entryCount}`).remove();
+      }
+    }
+
+    // --- PDF Generation & Cloud Upload ---
+    function getMonthName(i) {
+      return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i];
+    }
+
+    async function getNextBillNumberFromCloud() {
+      const configRef = doc(db, "appConfig", "settings");
+      try {
+        const newBillNumber = await runTransaction(db, async (transaction) => {
+          const configDoc = await transaction.get(configRef);
+          if (!configDoc.exists()) {
+            transaction.set(configRef, { nextBillNumber: 2 });
+            return 1; 
+          }
+          const currentNumber = configDoc.data().nextBillNumber;
+          transaction.update(configRef, { nextBillNumber: currentNumber + 1 });
+          return currentNumber;
+        });
+        return String(newBillNumber).padStart(3, "0");
+      } catch (e) {
+        console.error("Transaction failed: ", e);
+        alert("Could not get next bill number from cloud. Please try again.");
+        throw e;
+      }
+    }
+
+    window.saveAndShowPDF = async function() {
+      const { jsPDF } = window.jspdf;
+      const docPDF = new jsPDF();
+      const entries = document.querySelectorAll('.entry');
+      if (entries.length === 0) return alert("No entries to save.");
+
+      let billNumber;
+      try {
+        billNumber = await getNextBillNumberFromCloud();
+      } catch (e) {
+        // Error already alerted in getNextBillNumberFromCloud, so just return
+        return;
+      }
+      // If getNextBillNumberFromCloud threw and was caught, it might return undefined.
+      // This check is more robust.
+      if (!billNumber) {
+          console.error("Failed to obtain a bill number. Aborting saveAndShowPDF.");
+          return;
+      }
+
+
+      const now = new Date();
+      const firstEntryDateInput = entries[0].querySelector('input[type="date"]');
+      if (!firstEntryDateInput || !firstEntryDateInput.value) {
+        alert("Please enter a date for the first transaction.");
+        return;
+      }
+      const entryDate = new Date(firstEntryDateInput.value);
+      const billMonth = getMonthName(entryDate.getMonth());
+      const billDate = now.toLocaleDateString('en-GB');
+
+      let y = 70, total = 0, partyName = '';
+      const transactionDataForDB = [];
+
+      docPDF.setFont("Helvetica", "bold");
+      docPDF.setFontSize(10);
+      docPDF.text(`BILL NO:- ${billNumber}`, 10, 10);
+      docPDF.text(`DATE:- ${billDate}`, 150, 10);
+      docPDF.setFontSize(12);
+      docPDF.text("Vehicle No: DL1LAH9743", 10, 20);
+      docPDF.text(`BILL MONTH: ${billMonth}`, 150, 20);
+      docPDF.setFontSize(14);
+      docPDF.text("DHARMENDRA KUMAR", 10, 30);
+      docPDF.setFont("Helvetica", "normal");
+      docPDF.setFontSize(11);
+      docPDF.text("House No.P-15, Pana Udyan, North West Delhi - 110040", 10, 40);
+      docPDF.text("Pan No. KGTPK4092R", 10, 50);
+
+      docPDF.setFont("Courier", "bold");
+      docPDF.setFontSize(11);
+      docPDF.text("DATE                        TO-FROM                MONEY", 10, y - 10);
+      docPDF.setFont("Courier", "normal");
+
+      entries.forEach(entry => {
+        const dateVal = entry.querySelector('input[type="date"]').value || "---";
+        const tofromVal = entry.querySelector('input[name^="tofrom"]').value || "---";
+        const moneyVal = parseFloat(entry.querySelector('input[name^="money"]').value) || 0;
+        const partySelect = entry.querySelector('select'); // Get the select element
+        let partyVal = "General"; // Default value
+        if (partySelect && partySelect.value) { // Check if select exists and has a value
+            partyVal = partySelect.value;
+        }
+        
+        if (!partyName && partyVal && partyVal !== "No Parties Available" && partyVal !== "") partyName = partyVal;
+
+        transactionDataForDB.push({ date: dateVal, toFrom: tofromVal, money: moneyVal });
+        total += moneyVal;
+        const line = `${dateVal.padEnd(27)} ${tofromVal.padEnd(22)} ${moneyVal.toFixed(2)}`;
+        docPDF.text(line, 10, y);
+        y += 10;
+      });
+      
+      // Ensure partyName is set, especially if only one entry and it might not have been explicitly selected
+      if (!partyName && entries.length > 0) {
+          const firstEntryPartySelect = entries[0].querySelector('select');
+          if (firstEntryPartySelect && firstEntryPartySelect.value && firstEntryPartySelect.value !== "No Parties Available" && firstEntryPartySelect.value !== "") {
+              partyName = firstEntryPartySelect.value;
+          }
+      }
+      
+      // If still no partyName and partyList has items, try to use the first party as a fallback
+      if (!partyName && partyList.length > 0) {
+         partyName = partyList[0];
+      } else if (!partyName) { // Final check
+         alert("Please select a party for the transaction or add a party first.");
+         return;
+      }
+
+      docPDF.setFont("Courier", "bold");
+      docPDF.text(`\nTotal: ${total.toFixed(2)}`, 150, y);
+
+      const pdfBlob = docPDF.output("blob");
+      const fileName = `transactions-${billNumber}-${partyName.replace(/\s+/g, '_')}.pdf`;
+      const pdfStoragePath = `bills/${fileName}`;
+      const pdfFileRef = ref(storage, pdfStoragePath);
+
+      try {
+        await uploadBytes(pdfFileRef, pdfBlob);
+        console.log('Uploaded PDF to Firebase Storage:', pdfStoragePath);
+
+        await addDoc(collection(db, "bills"), {
+          billNumber: billNumber,
+          generatedAt: serverTimestamp(),
+          billMonth: billMonth,
+          totalAmount: parseFloat(total.toFixed(2)),
+          partyName: partyName,
+          pdfStoragePath: pdfStoragePath,
+          transactions: transactionDataForDB
+        });
+        console.log('Bill metadata saved to Firestore');
+
+        alert(`Bill ${billNumber} uploaded successfully for party ${partyName}!`);
+        if(partyName) showPartyUploads(partyName); 
+        document.getElementById("form-container").innerHTML = "";
+        entryCount = 0;
+        addEntry();
+
+      } catch (e) {
+        console.error("Error uploading PDF or saving bill: ", e);
+        alert("Failed to upload to cloud. Error: " + e.message);
+      }
+    }
+
+    // --- Displaying and Managing Uploaded PDFs from Cloud ---
+    window.showPartyUploads = async function(party) {
+      await renderPartyUploads(party);
+      document.getElementById('side-menu').classList.remove('show');
+    }
+
+    async function renderPartyUploads(partyName) {
+      const pdfListContainer = document.getElementById("pdf-list");
+      pdfListContainer.innerHTML = `<h3>Uploads for ${partyName}:</h3><div id="loading-pdfs">Loading...</div>`;
+      
+      try {
+        const q = query(collection(db, "bills"), where("partyName", "==", partyName));
+        const querySnapshot = await getDocs(q);
+        
+        const loadingIndicator = document.getElementById("loading-pdfs");
+        if (loadingIndicator) loadingIndicator.remove();
+
+        if (querySnapshot.empty) {
+          pdfListContainer.innerHTML += "<p>No uploads found for this party.</p>";
+          return;
+        }
+
+        querySnapshot.forEach((docSnap) => {
+          const upload = docSnap.data();
+          const billId = docSnap.id;
+          const div = document.createElement('div');
+          div.className = 'pdf-item';
+          const generatedDate = upload.generatedAt ? upload.generatedAt.toDate().toLocaleString() : 'N/A';
+          div.innerHTML = `
+            <span><b>Bill No:</b> ${upload.billNumber}</span><br>
+            <span><b>Timestamp:</b> ${generatedDate}</span><br>
+            <span><b>Total:</b> ₹${upload.totalAmount.toFixed(2)}</span><br>
+            <button onclick="downloadCloudPDF('${upload.pdfStoragePath}')">Download</button>
+            <button onclick="deleteCloudUpload('${billId}', '${upload.pdfStoragePath}', '${partyName}')">Delete</button>
+          `;
+          pdfListContainer.appendChild(div);
+        });
+      } catch (e) {
+        console.error("Error fetching party uploads: ", e);
+        pdfListContainer.innerHTML += "<p>Error loading uploads. Please try again.</p>";
+      }
+    }
+
+    window.downloadCloudPDF = async function(pdfStoragePath) {
+      try {
+        const downloadURL = await getDownloadURL(ref(storage, pdfStoragePath));
+        const link = document.createElement('a');
+        link.href = downloadURL;
+        link.download = pdfStoragePath.substring(pdfStoragePath.lastIndexOf('/') + 1); 
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        console.error("Error getting download URL: ", e);
+        alert("Could not download PDF. Error: " + e.message);
+      }
+    }
+
+    window.deleteCloudUpload = async function(billId, pdfStoragePath, partyName) {
+      if (!confirm("Are you sure you want to delete this bill? This cannot be undone.")) {
+        return;
+      }
+      try {
+        await deleteDoc(doc(db, "bills", billId));
+        console.log("Firestore document deleted:", billId);
+
+        const fileRef = ref(storage, pdfStoragePath);
+        await deleteObject(fileRef);
+        console.log("Firebase Storage file deleted:", pdfStoragePath);
+
+        alert("Bill deleted successfully.");
+        renderPartyUploads(partyName);
+      } catch (e) {
+        console.error("Error deleting upload: ", e);
+        alert("Failed to delete bill. Error: " + e.message);
+      }
+    }
+
+    // Initial checks or calls can go here if needed,
+    // but most logic is triggered by user interaction after code validation.
+
+  </script>
+</body>
+</html>
