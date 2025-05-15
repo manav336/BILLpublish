@@ -147,8 +147,7 @@
 
   <script type="module">
     // Import Firebase and jspdf
-    import { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject } from './firebase-config.js';
-    const { jsPDF } = window.jspdf;
+  import { db, storage, collection, getDocs, addDoc, doc, updateDoc, getDoc, deleteDoc, query, where, serverTimestamp, runTransaction, ref, uploadBytes, getDownloadURL, deleteObject } from '/BILLpublish/firebase-config.js';
 
     // --- UI Elements & Event Listeners ---
     document.getElementById('menu-toggle').onclick = () => document.getElementById('side-menu').classList.add('show');
